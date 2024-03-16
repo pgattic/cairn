@@ -1,0 +1,23 @@
+
+
+$fact # Factorial
+  dup -- ?++:fact *
+
+#$fib # Fibonacci
+#  -- ?0:1:fib dup -- ?0:1:fib + +
+
+#$print-help
+#  swp putc print
+#
+#$print-end
+#  _ putc
+#
+#$print
+#  -- ?print-end:print-help
+
+$main
+  10 fact putl
+  #65 66 67 3 print
+  #6 fib putl
+
+
