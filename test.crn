@@ -15,9 +15,16 @@ $fact # Factorial
 #$print
 #  -- ?print-end:print-help
 
+$say-hi
+  "Hello, " print print "!" println
+
 $main
-  10 fact putl
-  #65 66 67 3 print
-  #6 fib putl
+  "This is epic" println
+  "What is your name?" println
+  readln say-hi
+  "Jacob" say-hi
+
+  10 fact putln
+  #6 fib putln
 
 

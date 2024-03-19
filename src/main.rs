@@ -1,8 +1,10 @@
 use std::env;
 use std::fs;
+use std::io;
 use std::collections::HashMap;
 use num_bigint::BigInt;
 use num_traits::cast::ToPrimitive;
+use num_bigint::Sign::Plus;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -16,8 +18,7 @@ fn main() {
         .map(|line| line.split("#").next().unwrap_or(""))
         .collect::<Vec<_>>()
         .join(" ");
-    let code: String = modified_lines.replace(&['(', ')'][..], "");
-    let code: Vec<&str> = code.split_whitespace().collect();
+    let code: Vec<String> = split_code(&modified_lines);
 
     let mut functions: HashMap<&str, Vec<&str>> = HashMap::new();
     let mut current_func = "";
@@ -31,17 +32,36 @@ fn main() {
         }
     }
 
-    println!("{:?}", functions);
-    execute(&functions);
-
+    _ = execute(functions);
 }
 
-fn execute(code: &HashMap<&str, Vec<&str>>) {
+fn split_code(input: &String) -> Vec<String> {
+    let input: Vec<char> = input.chars().collect();
+    let mut result: Vec<String> = Vec::new();
+    let mut in_str = false;
+    let mut curr_str: String = "".to_string();
+    for i in input {
+        if i == '"' {
+            in_str = !in_str;
+        } else if !in_str {
+            if i == ' ' || i == '\n' {
+                if curr_str.len() > 0 {
+                    result.push(curr_str);
+                    curr_str = "".to_string();
+                }
+                continue;
+            }
+        }
+        curr_str.push(i);
+    }
+    result
+}
+
+fn execute(code: HashMap<&str, Vec<&str>>) -> Result<(), String> {
     let mut stack: Vec<BigInt> = Vec::new();
     let mut instructions: Vec<&str> = code["main"].iter().cloned().collect();
 
     while !instructions.is_empty() {
-        println!("{:?} {:?}", stack, instructions);
         let c_instr = instructions[0];
         instructions.remove(0);
     //    println!("{}", c_instr);
@@ -56,17 +76,35 @@ fn execute(code: &HashMap<&str, Vec<&str>>) {
                             print!("{}", value);
                         }
                     }
-                    "putl" => {
+                    "putln" => {
                         if let Some(value) = stack.pop() {
                             print!("{}\n", value);
+                        } else {
+                            println!();
                         }
                     }
-                    "putc" => {
+                    "print" => {
                         if let Some(value) = stack.pop() {
-                            if let Some(ch) = char::from_u32(value.try_into().unwrap()) {
-                                print!("{}", ch);
-                            }
+                            let (_, bytes_be) = value.to_bytes_be();
+                            print!("{}", String::from_utf8(bytes_be).unwrap());
                         }
+                    }
+                    "println" => {
+                        if let Some(value) = stack.pop() {
+                            let (_, bytes_be) = value.to_bytes_be();
+                            println!("{}", String::from_utf8(bytes_be).unwrap());
+                        }
+                    }
+                    "readln" => {
+                        let mut input = String::new();
+                        io::stdin().read_line(&mut input).expect("error: unable to read user input");
+                        if let Some('\n')=input.chars().next_back() {
+                            input.pop();
+                        }
+                        if let Some('\r')=input.chars().next_back() {
+                            input.pop();
+                        }
+                        stack.push(BigInt::from_bytes_be(Plus, input.as_bytes()));
                     }
                     "--" => {
                         if let Some(value) = stack.last_mut() {
@@ -192,6 +230,10 @@ fn execute(code: &HashMap<&str, Vec<&str>>) {
                             }
                         }
                     }
+                    s if s.starts_with('"') => { // a string!
+                        let value = &s[1..s.len()-1];
+                        stack.push(BigInt::from_bytes_be(Plus, value.as_bytes()));
+                    }
                     &_ => { // Code-defined procedures
                         if let Some(values) = code.get(c_instr) {
                             for value in values.iter().rev() {
@@ -199,11 +241,13 @@ fn execute(code: &HashMap<&str, Vec<&str>>) {
                             }
                         } else {
                             println!("Unresolved Symbol: {}", c_instr);
+                            return Ok(());
                         }
                     }
                 }
             }
         }
     }
+    Ok(())
 }
 

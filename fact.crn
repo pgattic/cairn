@@ -1,0 +1,6 @@
+
+$fact # Factorial
+  dup -- ?++:fact *
+
+$main 10 fact putln
+
