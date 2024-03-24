@@ -9,12 +9,16 @@ use num_bigint::Sign::Plus;
 fn main() {
     let args: Vec<String> = env::args().collect();
 
-    let target_file: String = if args.len() > 1 {args.get(1).expect("owie").to_string()} else {"test.crn".to_string()};
+    let target_file = if args.len() > 1 {
+        args.get(1).expect("owie")
+    } else {
+        "test.crn"
+    };
 
     let contents: String = fs::read_to_string(target_file).expect("Failed to read file");
 
     let code_lines = contents.split("\n");
-    let modified_lines  = code_lines // comments
+    let modified_lines = code_lines // code comments
         .map(|line| line.split("#").next().unwrap_or(""))
         .collect::<Vec<_>>()
         .join(" ");
@@ -32,6 +36,7 @@ fn main() {
         }
     }
 
+    //println!("{:?}", functions);
     _ = execute(functions);
 }
 
@@ -44,12 +49,19 @@ fn split_code(input: &String) -> Vec<String> {
         if i == '"' {
             in_str = !in_str;
         } else if !in_str {
-            if i == ' ' || i == '\n' {
+            if i == ' ' || i == '\n' { // Check for '\n' is redundant. Keeping it just in case.
                 if curr_str.len() > 0 {
                     result.push(curr_str);
                     curr_str = "".to_string();
                 }
                 continue;
+//            } else if "{}?:".contains(i) {
+//                if curr_str.len() > 0 {
+//                    result.push(curr_str);
+//                    curr_str = "".to_string();
+//                }
+//                result.push(i.to_string());
+//                continue;
             }
         }
         curr_str.push(i);
@@ -57,20 +69,50 @@ fn split_code(input: &String) -> Vec<String> {
     result
 }
 
+//fn find_bracket(code: &Vec<&str>, start_i: usize) -> usize {
+//    let mut bracket_bal = 1;
+//    let mut i = start_i;
+//    loop {
+//        if i > code.len() {
+//            return 0;
+//        }
+//        if code[i] == "}" {
+//            bracket_bal -= 1;
+//            if bracket_bal == 0 {
+//                return i
+//            }
+//        } else if code[i] == "{" {
+//            bracket_bal += 1;
+//        }
+//        i += 1;
+//    }
+//}
+//
+//fn end_of_opt(code: &Vec<&str>) -> usize {
+//    if code[0] == "{" {
+//        find_bracket(&code, 1)
+//    } else {
+//        0
+//    }
+//}
+
 fn execute(code: HashMap<&str, Vec<&str>>) -> Result<(), String> {
     let mut stack: Vec<BigInt> = Vec::new();
     let mut instructions: Vec<&str> = code["main"].iter().cloned().collect();
 
     while !instructions.is_empty() {
+        println!("{:?} {:?}", stack, instructions);
         let c_instr = instructions[0];
         instructions.remove(0);
-    //    println!("{}", c_instr);
         match c_instr.parse::<BigInt>() {
             Ok(val) => {
                 stack.push(val);
             }
             Err(_) => {
                 match c_instr { // Built-in procedures
+//                    "{" => {
+//                        instructions.remove(find_bracket(&instructions, 0));
+//                    }
                     "put" => {
                         if let Some(value) = stack.pop() {
                             print!("{}", value);
@@ -197,8 +239,8 @@ fn execute(code: HashMap<&str, Vec<&str>>) -> Result<(), String> {
                         stack.pop();
                     }
                     "dup" => {
-                        if let Some(&ref last_value) = stack.last() {
-                            stack.push(last_value.clone());
+                        if let Some(value) = stack.last() {
+                            stack.push(value.clone());
                         } else {
                             stack.push(BigInt::from(0));
                         }
@@ -211,14 +253,46 @@ fn execute(code: HashMap<&str, Vec<&str>>) -> Result<(), String> {
                             }
                         }
                     }
+                    "over" => {
+                        let val = if stack.len() > 2 {
+                            stack[stack.len()-2].clone()
+                        } else {
+                            BigInt::from(0)
+                        };
+                        stack.push(val);
+                    }
+//                    "?" => { // Match/If/Map command
+//                        if let Some(value) = stack.last() {
+//                            let mut curr_opt = BigInt::from(0);
+//                            loop {
+//                                println!("{:?} {:?}", stack, instructions);
+//                                if &curr_opt < value { // try to find the next option
+//                                    let e_o = end_of_opt(&instructions);
+//                                    if instructions[e_o + 1] == ":" {
+//                                        curr_opt += 1;
+//                                        instructions.remove(0);
+//                                        instructions.remove(0);
+//                                    } else {
+//                                        break;
+//                                    }
+//                                } else {
+//                                    while instructions[ end_of_opt(&instructions) + 1 ] == ":" {
+//                                        let e_o = end_of_opt(&instructions) + 1;
+//                                        instructions.drain(1..e_o+1);
+//                                    }
+//                                    break;
+//                                }
+//                            }
+//                        }
+//                    }
                     s if s.starts_with('?') => {
                         if c_instr.contains(':') {
                             let options: Vec<&str> = c_instr[1..].split(":").collect();
-                            if let Some(value) = stack.last() {
+                            if let Some(value) = stack.pop() {
                                 let index: usize = {
-                                    if *value < BigInt::from(0) {
+                                    if value < BigInt::from(0) {
                                         0
-                                    } else if *value >= BigInt::from(options.len()) {
+                                    } else if value >= BigInt::from(options.len()) {
                                         options.len()-1
                                     } else {
                                         value.to_usize().expect("YEET")
@@ -234,6 +308,12 @@ fn execute(code: HashMap<&str, Vec<&str>>) -> Result<(), String> {
                         let value = &s[1..s.len()-1];
                         stack.push(BigInt::from_bytes_be(Plus, value.as_bytes()));
                     }
+//                    s if s.starts_with('{') => { // nested code
+//                        let splits = split_code(&s[1..s.len()-1].to_string());
+//                        for i in splits.iter().rev() {
+//                            instructions.insert(0, &i.clone());
+//                        }
+//                    }
                     &_ => { // Code-defined procedures
                         if let Some(values) = code.get(c_instr) {
                             for value in values.iter().rev() {
