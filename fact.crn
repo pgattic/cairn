@@ -1,6 +1,11 @@
 
 $fact # Factorial
-  dup -- ?++:fact *
+  dup -- dup ?++:fact *
 
-$main 10 fact putln
+$say-hello
+  "Hello, " print print "!" println
+
+$main
+  "Jacob" say-hello
+  12 8 * putln "Hello World!" println
 

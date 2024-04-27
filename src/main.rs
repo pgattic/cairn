@@ -9,11 +9,12 @@ use num_bigint::Sign::Plus;
 fn main() {
     let args: Vec<String> = env::args().collect();
 
-    let target_file = if args.len() > 1 {
-        args.get(1).expect("owie")
-    } else {
-        "test.crn"
-    };
+    if args.len() < 2 {
+        println!("Please specify a file.");
+        return;
+    }
+
+    let target_file = args.get(1).expect("owie");
 
     let contents: String = fs::read_to_string(target_file).expect("Failed to read file");
 
@@ -101,7 +102,7 @@ fn execute(code: HashMap<&str, Vec<&str>>) -> Result<(), String> {
     let mut instructions: Vec<&str> = code["main"].iter().cloned().collect();
 
     while !instructions.is_empty() {
-        println!("{:?} {:?}", stack, instructions);
+//        println!("{:?} {:?}", stack, instructions);
         let c_instr = instructions[0];
         instructions.remove(0);
         match c_instr.parse::<BigInt>() {
