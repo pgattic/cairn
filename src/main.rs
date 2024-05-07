@@ -23,7 +23,7 @@ fn main() {
         .map(|line| line.split("#").next().unwrap_or(""))
         .collect::<Vec<_>>()
         .join(" ");
-    let code: Vec<String> = split_code(&modified_lines);
+    let code: Vec<&str> = split_code(&modified_lines);
 
     let mut functions: HashMap<&str, Vec<&str>> = HashMap::new();
     let mut current_func = "";
@@ -41,20 +41,19 @@ fn main() {
     _ = execute(functions);
 }
 
-fn split_code(input: &String) -> Vec<String> {
-    let input: Vec<char> = input.chars().collect();
-    let mut result: Vec<String> = Vec::new();
+fn split_code(input: &String) -> Vec<&str> {
+    let mut result: Vec<&str> = Vec::new();
     let mut in_str = false;
-    let mut curr_str: String = "".to_string();
-    for i in input {
-        if i == '"' {
+    let mut word_start = 0;
+    for (i, ch) in input.chars().enumerate() {
+        if ch == '"' {
             in_str = !in_str;
         } else if !in_str {
-            if i == ' ' || i == '\n' { // Check for '\n' is redundant. Keeping it just in case.
-                if curr_str.len() > 0 {
-                    result.push(curr_str);
-                    curr_str = "".to_string();
+            if ch == ' ' || ch == '\n' { // Check for '\n' is redundant. Keeping it just in case.
+                if i - word_start > 0 {
+                    result.push(&input[word_start..i]);
                 }
+                word_start = i + 1;
                 continue;
 //            } else if "{}?:".contains(i) {
 //                if curr_str.len() > 0 {
@@ -65,7 +64,6 @@ fn split_code(input: &String) -> Vec<String> {
 //                continue;
             }
         }
-        curr_str.push(i);
     }
     result
 }
@@ -255,8 +253,8 @@ fn execute(code: HashMap<&str, Vec<&str>>) -> Result<(), String> {
                         }
                     }
                     "over" => {
-                        let val = if stack.len() > 2 {
-                            stack[stack.len()-2].clone()
+                        let val: BigInt = if stack.len() > 2 {
+                            stack.remove(stack.len()-2)
                         } else {
                             BigInt::from(0)
                         };
