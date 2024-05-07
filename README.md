@@ -1,15 +1,15 @@
 
-# Cairn 🪨
+# Cairn ⛰️
 
-Cairn is a stack-oriented programming language, and the interpreter code found here is my first-ever rust project!!!
-
-[Software Demo Video](https://youtu.be/4RxESsPvRfk)
+([Software Demo Video](https://youtu.be/4RxESsPvRfk))
 
 ## Description
 
-Cairn is meant to be a general-purpose stack-oriented programming language. All code is meant to be executed onto a single execution stack and evaluated into a single data stack.
+Cairn is a general-purpose stack-oriented programming language.
 
-My main reason for creating this language was out of curiosity. While reading up on the inner workings of WebAssembly, I read that it uses a stack-based Virtual Machine code. This sounded very interesting to me. I looked at some example WASM assembly code, and realized that theoretically anything can be done in a stack-based language!
+All code is meant to be executed from a single execution stack and ultimately evaluated into a single data stack.
+
+My main reason for creating this language was out of interest in stack-based approaches.
 
 So, while this project was mostly an exploratory venture for me, it also resulted in a very lightweight math-focused language that I can use for complex mathematical calculations that I need done quickly. I may use it as a scripting language for other personal projects as an alternative to Python or Bash, if it matures enough and gains general-purpose utility.
 
@@ -46,33 +46,38 @@ $main
 
 ## Built-in functions
 
-Note: `t` refers to the value at the top of the stack
-
-- `putln` (pops 1, pushes 0): prints the value at the top of the stack as an integer.
-- `println` (pops 1): prints as a string instead of an int
+- `put`/`putln` (pops 1): outputs the value at the top of the stack as an integer.
+- `print`/`println` (pops 1): outputs as a string instead of an int
 - `readln` (pops 0, pushes 1): Reads a line from the standard input
 
 ### Math
 
+- `++`: increment (pops 1, pushes 1) - increments the value at the top of the stack by 1
+- `--`: decrement (pops 1, pushes 1)
 - `+`: add (pops 2, pushes 1)
-- `-`: subtract (pops 2, pushes 1) - suntracts value of top of stack from value underneath it
+- `-`: subtract (pops 2, pushes 1) - subtracts value of top of stack from value underneath it
 - `*`: multiply (pops 2, pushes 1) - multiplies the top two values
 - `div`: divide (pops 2, pushes 1) - integer division
-- `=` (pops 2, pushes 1) - equality
-
-Other comparison operators have the same syntax that other languages use.
+- `%`: modulo (pops 2, pushes 1)
+- `=`/`!=`/`<`/`>`/`<=`/`>=` (pops 2, pushes 1) - comparison operators (pushes 0 for false and 1 for true)
 
 ### Control Flow
 
 - `_` (pops 1, pushes 0): drop
-- `dup` (pops 0, pushes 1): - copies the value at the top of the stack
-- `over` (pops 0, pushes 1): - Copies the second-from-top value to the top of the stack
-- `?[val1]:[val2]:...:[valN]` (pops 0, pushes 0): Match statement (TODO: describe in further detail)
+- `dup` (pops 0, pushes 1): copies the value at the top of the stack
+- `swp` (pops 2, pushes 2): Switches the location of the top two items in the stack (`a b` -> `b a`)
+- `over` (pops 3, pushes 3): Rearranges the top three values of the stack like this: `a b c` -> `b c a` (a moves to the top of the stack)
+- `?[val1]:[val2]:...:[valN]` (pops 1, pushes 0): Match statement (TODO: describe in further detail)
 
 ## Data Types
 
-- int: represented with their integer value
-- string: alias for a sequence of ints, followed by its length
+- Int (arbitrary size supported)
+
+Strings are syntactic sugar. When the interpreter comes across a string, it converts it into an int according to Unicode standard. `"Hello"` -> `0x48656c6c6f` (310939249775). Ints in Cairn can be arbitrarily large. Part of the principles of this language is that you can really represent any kind of data using a number. The significance of data it is defined by its usage, not its attributes. This is why it has separate functions to print numbers and strings.
+
+There is no collection type. Using the stack to store and manipulate a collection is possible, but the recommended way is to use modular arithmetic to marshal and unmarshal collections of data within a single integer.
+
+Floating-point support is under consideration.
 
 ## Development Environment
 
