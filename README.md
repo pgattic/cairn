@@ -63,6 +63,7 @@ $main
 - `swp` (pops 2, pushes 2): Switches the location of the top two items in the stack (`a b` -> `b a`)
 - `over` (pops 3, pushes 3): Rearranges the top three values of the stack like this: `a b c` -> `b c a` (a moves to the top of the stack)
 - `?[val1]:[val2]:...:[valN]` (pops 1, pushes 0): Match statement (TODO: describe in further detail)
+- `exit` (pops 1, pushes 0): Exit the program with error code of the popped value
 
 ## Data Types
 

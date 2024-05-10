@@ -10,13 +10,20 @@ fn main() {
     let args: Vec<String> = env::args().collect();
 
     if args.len() < 2 {
-        println!("Please specify a file.");
-        return;
+        println!("[{}]: Shell mode is a planned feature. See https://github.com/pgattic/cairn/issues/1 for progress updates.", args[0]);
+        eprintln!("Please specify a file.");
+        std::process::exit(1);
     }
 
-    let target_file = args.get(1).expect("owie");
+    let target_file = &args[1];
 
-    let contents: String = fs::read_to_string(target_file).expect("Failed to read file");
+    let contents: String = match fs::read_to_string(target_file) {
+        Ok(data) => data,
+        Err(err) => {
+            eprintln!("{}: can't open file '{}': {}", args[0], target_file, err);
+            std::process::exit(2);
+        }
+    };
 
     let code: Vec<&str> = split_code(&contents);
 
@@ -33,7 +40,7 @@ fn main() {
     }
 
     //println!("{:?}", functions);
-    _ = execute(functions);
+    execute(functions);
 }
 
 fn split_code(input: &str) -> Vec<&str> {
@@ -58,15 +65,23 @@ fn split_code(input: &str) -> Vec<&str> {
             _ => {}
         }
     }
+    if in_str {
+        eprintln!("ERROR: Unclosed string");
+        std::process::exit(1);
+    }
     if word_start < input.len() { // Check for no ending whitespace
         result.push(&input[word_start..]);
     }
     result
 }
 
-fn execute(code: HashMap<&str, Vec<&str>>) -> Result<(), String> {
+fn execute(code: HashMap<&str, Vec<&str>>) {
     let mut stack: Vec<BigInt> = Vec::new();
+    if !code.contains_key("main") { // I can has main function?
+        return;
+    }
     let mut instructions: Vec<&str> = code["main"].iter().cloned().collect();
+    let mut last_func: &str = "main";
 
     while !instructions.is_empty() {
         // println!("{:?} {:?}", stack, instructions);
@@ -85,7 +100,7 @@ fn execute(code: HashMap<&str, Vec<&str>>) -> Result<(), String> {
                     }
                     "putln" => {
                         if let Some(value) = stack.pop() {
-                            print!("{}\n", value);
+                            println!("{}", value);
                         } else {
                             println!();
                         }
@@ -112,6 +127,20 @@ fn execute(code: HashMap<&str, Vec<&str>>) -> Result<(), String> {
                             input.pop();
                         }
                         stack.push(BigInt::from_bytes_be(Plus, input.as_bytes()));
+                    }
+                    "exit" => {
+                        if let Some(value) = stack.pop() {
+                            match value.try_into() {
+                                Ok(val_u32) => {
+                                    std::process::exit(val_u32);
+                                },
+                                Err(_) => {
+                                    std::process::exit(1);
+                                }
+                            }
+                        } else {
+                            std::process::exit(0);
+                        }
                     }
                     "--" => {
                         if let Some(value) = stack.last_mut() {
@@ -249,20 +278,21 @@ fn execute(code: HashMap<&str, Vec<&str>>) -> Result<(), String> {
                         let value = &s[1..s.len()-1];
                         stack.push(BigInt::from_bytes_be(Plus, value.as_bytes()));
                     }
-                    &_ => { // Code-defined procedures
+                    _ => { // Code-defined procedures
                         if let Some(values) = code.get(c_instr) {
+                            last_func = c_instr;
                             for value in values.iter().rev() {
                                 instructions.insert(0, *value);
                             }
                         } else {
-                            println!("Unresolved Symbol: {}", c_instr);
-                            return Ok(());
+                            eprintln!("ERROR: Unresolved Symbol: \"{}\"", c_instr);
+                            eprintln!("  In \"${}\"", last_func);
+                            std::process::exit(1);
                         }
                     }
                 }
             }
         }
     }
-    Ok(())
 }
 
