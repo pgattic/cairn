@@ -1,11 +1,7 @@
 
-$fact # Factorial
+$fact # This function pops 1 and puts 1 overall
   dup -- dup ?++:fact *
 
-$say-hello
-  "Hello, " print print "!" println
-
 $main
-  "Jacob" say-hello
-  12 8 * putln "Hello World!" println
+  100000 fact putln
 

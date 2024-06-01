@@ -80,13 +80,13 @@ fn execute(code: HashMap<&str, Vec<&str>>) {
     if !code.contains_key("main") { // I can has main function?
         return;
     }
-    let mut instructions: Vec<&str> = code["main"].iter().cloned().collect();
+    let mut instructions: Vec<&str> = code["main"].clone();
+    instructions.reverse();
     let mut last_func: &str = "main";
 
     while !instructions.is_empty() {
         // println!("{:?} {:?}", stack, instructions);
-        let c_instr = instructions[0];
-        instructions.remove(0);
+        let c_instr = instructions.pop().unwrap();
         match c_instr.parse::<BigInt>() {
             Ok(val) => {
                 stack.push(val);
@@ -269,7 +269,7 @@ fn execute(code: HashMap<&str, Vec<&str>>) {
                                     }
                                 };
                                 if !options[index].is_empty() {
-                                    instructions.insert(0, options[index]);
+                                    instructions.push(options[index]);
                                 }
                             }
                         }
@@ -282,7 +282,7 @@ fn execute(code: HashMap<&str, Vec<&str>>) {
                         if let Some(values) = code.get(c_instr) {
                             last_func = c_instr;
                             for value in values.iter().rev() {
-                                instructions.insert(0, *value);
+                                instructions.push(*value);
                             }
                         } else {
                             eprintln!("ERROR: Unresolved Symbol: \"{}\"", c_instr);
