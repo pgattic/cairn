@@ -1,17 +1,118 @@
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::env;
 use std::fs;
 use std::io;
 use std::collections::HashMap;
 use num_bigint::BigInt;
-use num_traits::cast::ToPrimitive;
 use num_bigint::Sign::Plus;
+
+#[derive(Clone)]
+#[derive(Debug)]
+enum Command {
+    Integer(BigInt),
+    BuiltIn(BuiltInCommand),
+    UserDef(u64),
+    Branch(HashMap<BigInt, Command>)
+}
+
+#[derive(Clone)]
+#[derive(Debug)]
+enum BuiltInCommand {
+    Put,
+    PutLine,
+    Print,
+    PrintLine,
+    ReadLine,
+    Exit,
+
+    Increment,
+    Decrement,
+    Sum,
+    Difference,
+    Product,
+    Quotient,
+    Modulo,
+    Equality,
+    Inequality,
+    LessThan,
+    GreaterThan,
+    LessEqual,
+    GreaterEqual,
+
+    Drop,
+    Duplicate,
+    Swap,
+    Over,
+    NoOp,
+}
+
+impl Command {
+    pub fn from_str(s: &str) -> Self {
+        if let Ok(value) = s.parse::<BigInt>() {
+            return Command::Integer(value);
+        }
+
+        match s {
+            "put"       => Self::BuiltIn(BuiltInCommand::Put),
+            "putln"     => Self::BuiltIn(BuiltInCommand::PutLine),
+            "print"     => Self::BuiltIn(BuiltInCommand::Print),
+            "println"   => Self::BuiltIn(BuiltInCommand::PrintLine),
+            "readln"    => Self::BuiltIn(BuiltInCommand::ReadLine),
+            "exit"      => Self::BuiltIn(BuiltInCommand::Exit),
+            "++"        => Self::BuiltIn(BuiltInCommand::Increment),
+            "--"        => Self::BuiltIn(BuiltInCommand::Decrement),
+            "+"         => Self::BuiltIn(BuiltInCommand::Sum),
+            "-"         => Self::BuiltIn(BuiltInCommand::Difference),
+            "*"         => Self::BuiltIn(BuiltInCommand::Product),
+            "div"       => Self::BuiltIn(BuiltInCommand::Quotient),
+            "%"         => Self::BuiltIn(BuiltInCommand::Modulo),
+            "="         => Self::BuiltIn(BuiltInCommand::Equality),
+            "!="        => Self::BuiltIn(BuiltInCommand::Inequality),
+            "<"         => Self::BuiltIn(BuiltInCommand::LessThan),
+            ">"         => Self::BuiltIn(BuiltInCommand::GreaterThan),
+            "<="        => Self::BuiltIn(BuiltInCommand::LessEqual),
+            ">="        => Self::BuiltIn(BuiltInCommand::GreaterEqual),
+            "_"         => Self::BuiltIn(BuiltInCommand::Drop),
+            "dup"       => Self::BuiltIn(BuiltInCommand::Duplicate),
+            "swp"       => Self::BuiltIn(BuiltInCommand::Swap),
+            "over"      => Self::BuiltIn(BuiltInCommand::Over),
+            "nop"       => Self::BuiltIn(BuiltInCommand::NoOp),
+            s if s.starts_with('?') => {
+                let choices = s[1..].split(":");
+                let mut result = HashMap::new();
+                for (i, c) in choices.enumerate() {
+                    if !c.is_empty() {
+                        result.insert(BigInt::from(i), Self::from_str(c));
+                    } else {
+                        result.insert(BigInt::from(i), Self::BuiltIn(BuiltInCommand::NoOp));
+                    }
+                }
+                Self::Branch(result)
+            }
+            s if s.starts_with('"') => { // a string!
+                let value = &s[1..s.len()-1];
+                Self::Integer(BigInt::from_bytes_be(Plus, value.as_bytes()))
+            }
+            _ => Self::UserDef(calculate_hash(s))
+        }
+    }
+}
+
+
+fn calculate_hash(t: &str) -> u64 {
+    let mut s = DefaultHasher::new();
+    t.hash(&mut s);
+    s.finish()
+}
 
 fn main() {
     let args: Vec<String> = env::args().collect();
 
     if args.len() < 2 {
-        println!("[{}]: Shell mode is a planned feature. See https://github.com/pgattic/cairn/issues/1 for progress updates.", args[0]);
-        eprintln!("Please specify a file.");
+        println!("Shell mode is a planned feature.");
+        println!("See https://github.com/pgattic/cairn/issues/1 for progress updates.");
+        println!();
+        eprintln!("[{}]: Please specify a file.", args[0]);
         std::process::exit(1);
     }
 
@@ -25,29 +126,18 @@ fn main() {
         }
     };
 
-    let code: Vec<&str> = split_code(&contents);
-
-    let mut functions: HashMap<&str, Vec<&str>> = HashMap::new();
-    let mut current_func = "";
-
-    for c in &code {
-        if c.starts_with('$') {
-            current_func = &c[1..];
-            functions.insert(current_func, Vec::new());
-        } else if !current_func.is_empty() {
-            functions.entry(current_func).or_insert_with(Vec::new).push(c);
-        }
-    }
+    let functions = split_code(contents);
 
     //println!("{:?}", functions);
     execute(functions);
 }
 
-fn split_code(input: &str) -> Vec<&str> {
-    let mut result = Vec::new();
+fn split_code(input: String) -> HashMap<u64, Vec<Command>> {
+    let mut result: HashMap<u64, Vec<Command>> = HashMap::new();
     let mut in_comment = false;
     let mut in_str = false;
     let mut word_start = 0;
+    let mut curr_func_hash: Option<u64> = None;
     for (i, ch) in input.chars().enumerate() {
         match ch {
             '#' if !in_str => in_comment = true,
@@ -57,8 +147,20 @@ fn split_code(input: &str) -> Vec<&str> {
             }
             '"' if !in_comment => in_str = !in_str,
             ' ' | '\n' if !in_str && !in_comment => {
-                if i - word_start > 0 {
-                    result.push(&input[word_start..i]);
+                if i - word_start > 0 { // The Word is done!
+                    let word = &input[word_start..i];
+                    if word.starts_with('$') {
+                        let hash = calculate_hash(&word[1..]);
+                        curr_func_hash = Some(hash);
+                        result.insert(hash, Vec::new());
+                    } else {
+                        match curr_func_hash {
+                            None => (),
+                            Some(hash) => {
+                                result.entry(hash).or_insert_with(Vec::new).push(Command::from_str(word));
+                            }
+                        }
+                    }
                 }
                 word_start = i + 1;
             }
@@ -70,225 +172,216 @@ fn split_code(input: &str) -> Vec<&str> {
         std::process::exit(1);
     }
     if word_start < input.len() { // Check for no ending whitespace
-        result.push(&input[word_start..]);
+        match curr_func_hash {
+            None => (),
+            Some(hash) => {
+                result.entry(hash).or_insert_with(Vec::new).push(Command::from_str(&input[word_start..]));
+            }
+        }
     }
     result
 }
 
-fn execute(code: HashMap<&str, Vec<&str>>) {
+fn execute(code: HashMap<u64, Vec<Command>>) {
     let mut stack: Vec<BigInt> = Vec::new();
-    if !code.contains_key("main") { // I can has main function?
+    let main_hash: u64 = calculate_hash("main");
+    if !code.contains_key(&main_hash) { // I can has main function?
         return;
     }
-    let mut instructions: Vec<&str> = code["main"].clone();
+    let mut instructions = code[&main_hash].clone();
     instructions.reverse();
-    let mut last_func: &str = "main";
+    let mut last_func = main_hash;
 
     while !instructions.is_empty() {
-        // println!("{:?} {:?}", stack, instructions);
+        //println!("{:?}", stack);
         let c_instr = instructions.pop().unwrap();
-        match c_instr.parse::<BigInt>() {
-            Ok(val) => {
-                stack.push(val);
-            }
-            Err(_) => {
-                match c_instr { // Built-in procedures
-                    "put" => {
-                        if let Some(value) = stack.pop() {
-                            print!("{}", value);
-                        }
+        match c_instr {
+            Command::Integer(val) => stack.push(val),
+            Command::BuiltIn(cmd) => match cmd {
+                BuiltInCommand::Put => {
+                    if let Some(value) = stack.pop() {
+                        print!("{}", value);
                     }
-                    "putln" => {
-                        if let Some(value) = stack.pop() {
-                            println!("{}", value);
-                        } else {
-                            println!();
-                        }
+                }
+                BuiltInCommand::PutLine => {
+                    if let Some(value) = stack.pop() {
+                        println!("{}", value);
+                    } else {
+                        println!();
                     }
-                    "print" => {
-                        if let Some(value) = stack.pop() {
-                            let (_, bytes_be) = value.to_bytes_be();
-                            print!("{}", String::from_utf8(bytes_be).unwrap());
-                        }
+                }
+                BuiltInCommand::Print => {
+                    if let Some(value) = stack.pop() {
+                        let (_, bytes_be) = value.to_bytes_be();
+                        print!("{}", String::from_utf8(bytes_be).unwrap());
                     }
-                    "println" => {
-                        if let Some(value) = stack.pop() {
-                            let (_, bytes_be) = value.to_bytes_be();
-                            println!("{}", String::from_utf8(bytes_be).unwrap());
-                        }
+                }
+                BuiltInCommand::PrintLine => {
+                    if let Some(value) = stack.pop() {
+                        let (_, bytes_be) = value.to_bytes_be();
+                        println!("{}", String::from_utf8(bytes_be).unwrap());
                     }
-                    "readln" => {
-                        let mut input = String::new();
-                        io::stdin().read_line(&mut input).expect("error: unable to read user input");
-                        if let Some('\n')=input.chars().next_back() {
-                            input.pop();
-                        }
-                        if let Some('\r')=input.chars().next_back() {
-                            input.pop();
-                        }
-                        stack.push(BigInt::from_bytes_be(Plus, input.as_bytes()));
+                }
+                BuiltInCommand::ReadLine => {
+                    let mut input = String::new();
+                    io::stdin().read_line(&mut input).expect("error: unable to read user input");
+                    if let Some('\n') = input.chars().next_back() {
+                        input.pop();
                     }
-                    "exit" => {
-                        if let Some(value) = stack.pop() {
-                            match value.try_into() {
-                                Ok(val_u32) => {
-                                    std::process::exit(val_u32);
-                                },
-                                Err(_) => {
-                                    std::process::exit(1);
-                                }
-                            }
-                        } else {
-                            std::process::exit(0);
-                        }
+                    if let Some('\r') = input.chars().next_back() {
+                        input.pop();
                     }
-                    "--" => {
-                        if let Some(value) = stack.last_mut() {
-                            *value -= 1;
-                        }
-                    }
-                    "++" => {
-                        if let Some(value) = stack.last_mut() {
-                            *value += 1;
-                        }
-                    }
-                    "+" => {
-                        if let Some(value) = stack.pop() {
-                            if let Some(last) = stack.last_mut() {
-                                *last += value;
+                    stack.push(BigInt::from_bytes_be(Plus, input.as_bytes()));
+                }
+                BuiltInCommand::Exit => {
+                    if let Some(value) = stack.pop() {
+                        match value.try_into() {
+                            Ok(val_u32) => {
+                                std::process::exit(val_u32);
+                            },
+                            Err(_) => {
+                                std::process::exit(1);
                             }
                         }
+                    } else {
+                        std::process::exit(0);
                     }
-                    "-" => {
-                        if let Some(value) = stack.pop() {
-                            if let Some(last) = stack.last_mut() {
-                                *last -= value;
-                            }
+                }
+                BuiltInCommand::Decrement => {
+                    if let Some(value) = stack.last_mut() {
+                        *value -= 1;
+                    }
+                }
+                BuiltInCommand::Increment => {
+                    if let Some(value) = stack.last_mut() {
+                        *value += 1;
+                    }
+                }
+                BuiltInCommand::Sum => {
+                    if let Some(value) = stack.pop() {
+                        if let Some(last) = stack.last_mut() {
+                            *last += value;
                         }
                     }
-                    "*" => {
-                        if let Some(value) = stack.pop() {
-                            if let Some(last) = stack.last_mut() {
-                                *last *= value;
-                            }
+                }
+                BuiltInCommand::Difference => {
+                    if let Some(value) = stack.pop() {
+                        if let Some(last) = stack.last_mut() {
+                            *last -= value;
                         }
                     }
-                    "div" => {
-                        if let Some(value) = stack.pop() {
-                            if let Some(last) = stack.last_mut() {
-                                *last /= value;
-                            }
+                }
+                BuiltInCommand::Product => {
+                    if let Some(value) = stack.pop() {
+                        if let Some(last) = stack.last_mut() {
+                            *last *= value;
                         }
                     }
-                    "%" => {
-                        if let Some(value) = stack.pop() {
-                            if let Some(last) = stack.last_mut() {
-                                *last %= value;
-                            }
+                }
+                BuiltInCommand::Quotient => {
+                    if let Some(value) = stack.pop() {
+                        if let Some(last) = stack.last_mut() {
+                            *last /= value;
                         }
                     }
-                    "=" => {
-                        if let Some(value) = stack.pop() {
-                            if let Some(value_2) = stack.pop() {
-                                stack.push(if value == value_2 {BigInt::from(1)} else {BigInt::from(0)});
-                            }
+                }
+                BuiltInCommand::Modulo => {
+                    if let Some(value) = stack.pop() {
+                        if let Some(last) = stack.last_mut() {
+                            *last %= value;
                         }
                     }
-                    "!=" => {
-                        if let Some(value) = stack.pop() {
-                            if let Some(value_2) = stack.pop() {
-                                stack.push(if value != value_2 {BigInt::from(1)} else {BigInt::from(0)});
-                            }
+                }
+                BuiltInCommand::Equality => {
+                    if let Some(value) = stack.pop() {
+                        if let Some(value_2) = stack.pop() {
+                            stack.push(if value == value_2 {BigInt::from(1)} else {BigInt::from(0)});
                         }
                     }
-                    ">" => {
-                        if let Some(value) = stack.pop() {
-                            if let Some(value_2) = stack.pop() {
-                                stack.push(if value > value_2 {BigInt::from(1)} else {BigInt::from(0)});
-                            }
+                }
+                BuiltInCommand::Inequality => {
+                    if let Some(value) = stack.pop() {
+                        if let Some(value_2) = stack.pop() {
+                            stack.push(if value != value_2 {BigInt::from(1)} else {BigInt::from(0)});
                         }
                     }
-                    "<" => {
-                        if let Some(value) = stack.pop() {
-                            if let Some(value_2) = stack.pop() {
-                                stack.push(if value < value_2 {BigInt::from(1)} else {BigInt::from(0)});
-                            }
+                }
+                BuiltInCommand::GreaterThan => {
+                    if let Some(value) = stack.pop() {
+                        if let Some(value_2) = stack.pop() {
+                            stack.push(if value > value_2 {BigInt::from(1)} else {BigInt::from(0)});
                         }
                     }
-                    ">=" => {
-                        if let Some(value) = stack.pop() {
-                            if let Some(value_2) = stack.pop() {
-                                stack.push(if value >= value_2 {BigInt::from(1)} else {BigInt::from(0)});
-                            }
+                }
+                BuiltInCommand::LessThan => {
+                    if let Some(value) = stack.pop() {
+                        if let Some(value_2) = stack.pop() {
+                            stack.push(if value < value_2 {BigInt::from(1)} else {BigInt::from(0)});
                         }
                     }
-                    "<=" => {
-                        if let Some(value) = stack.pop() {
-                            if let Some(value_2) = stack.pop() {
-                                stack.push(if value <= value_2 {BigInt::from(1)} else {BigInt::from(0)});
-                            }
+                }
+                BuiltInCommand::GreaterEqual => {
+                    if let Some(value) = stack.pop() {
+                        if let Some(value_2) = stack.pop() {
+                            stack.push(if value >= value_2 {BigInt::from(1)} else {BigInt::from(0)});
                         }
                     }
-                    "_" => {
-                        stack.pop();
-                    }
-                    "dup" => {
-                        if let Some(value) = stack.last() {
-                            stack.push(value.clone());
-                        } else {
-                            stack.push(BigInt::from(0));
+                }
+                BuiltInCommand::LessEqual => {
+                    if let Some(value) = stack.pop() {
+                        if let Some(value_2) = stack.pop() {
+                            stack.push(if value <= value_2 {BigInt::from(1)} else {BigInt::from(0)});
                         }
                     }
-                    "swp" => {
-                        if let Some(value) = stack.pop() {
-                            if let Some(value_2) = stack.pop() {
-                                stack.push(value);
-                                stack.push(value_2);
-                            }
+                }
+                BuiltInCommand::Drop => {
+                    stack.pop();
+                }
+                BuiltInCommand::Duplicate => {
+                    if let Some(value) = stack.last() {
+                        stack.push(value.clone());
+                    } else {
+                        stack.push(BigInt::from(0));
+                    }
+                }
+                BuiltInCommand::Swap => {
+                    if let Some(value) = stack.pop() {
+                        if let Some(value_2) = stack.pop() {
+                            stack.push(value);
+                            stack.push(value_2);
                         }
                     }
-                    "over" => {
-                        let val: BigInt = if stack.len() > 2 {
-                            stack.remove(stack.len()-2)
-                        } else {
-                            BigInt::from(0)
-                        };
-                        stack.push(val);
+                }
+                BuiltInCommand::Over => {
+                    let val = if stack.len() > 2 {
+                        stack.remove(stack.len()-2)
+                    } else {
+                        BigInt::from(0)
+                    };
+                    stack.push(val);
+                }
+                BuiltInCommand::NoOp => ()
+            },
+            Command::UserDef(name) => {
+                if let Some(values) = code.get(&name) {
+                    last_func = name;
+                    for value in values.iter().rev() {
+                        instructions.push(value.clone());
                     }
-                    s if s.starts_with('?') => {
-                        if c_instr.contains(':') {
-                            let options: Vec<&str> = c_instr[1..].split(":").collect();
-                            if let Some(value) = stack.pop() {
-                                let index: usize = {
-                                    if value < BigInt::from(0) {
-                                        0
-                                    } else if value >= BigInt::from(options.len()) {
-                                        options.len()-1
-                                    } else {
-                                        value.to_usize().expect("YEET")
-                                    }
-                                };
-                                if !options[index].is_empty() {
-                                    instructions.push(options[index]);
-                                }
-                            }
-                        }
-                    }
-                    s if s.starts_with('"') => { // a string!
-                        let value = &s[1..s.len()-1];
-                        stack.push(BigInt::from_bytes_be(Plus, value.as_bytes()));
-                    }
-                    _ => { // Code-defined procedures
-                        if let Some(values) = code.get(c_instr) {
-                            last_func = c_instr;
-                            for value in values.iter().rev() {
-                                instructions.push(*value);
-                            }
-                        } else {
-                            eprintln!("ERROR: Unresolved Symbol: \"{}\"", c_instr);
-                            eprintln!("  In \"${}\"", last_func);
-                            std::process::exit(1);
-                        }
+                } else {
+                    eprintln!("ERROR: Unresolved Symbol: \"{}\"", name);
+                    eprintln!("  In \"${}\"", last_func);
+                    std::process::exit(1);
+                }
+            },
+            Command::Branch(expression) => {
+                let choice = stack.pop().unwrap();
+                if expression.contains_key(&choice) {
+                    instructions.push(expression.get(&choice).unwrap().clone());
+                } else {
+                    let max_opt = expression.keys().max().unwrap();
+                    if choice > *max_opt {
+                        instructions.push(expression.get(&max_opt).unwrap().clone());
                     }
                 }
             }
