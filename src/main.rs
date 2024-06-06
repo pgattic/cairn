@@ -43,6 +43,7 @@ enum BuiltInCommand {
     Duplicate,
     Swap,
     Over,
+    Rotate,
     NoOp,
 }
 
@@ -76,6 +77,7 @@ impl Command {
             "dup"       => Self::BuiltIn(BuiltInCommand::Duplicate),
             "swp"       => Self::BuiltIn(BuiltInCommand::Swap),
             "over"      => Self::BuiltIn(BuiltInCommand::Over),
+            "rot"       => Self::BuiltIn(BuiltInCommand::Rotate),
             "nop"       => Self::BuiltIn(BuiltInCommand::NoOp),
             s if s.starts_with('?') => {
                 let choices = s[1..].split(":");
@@ -193,7 +195,9 @@ fn execute(code: HashMap<u64, Vec<Command>>) {
     let mut last_func = main_hash;
 
     while !instructions.is_empty() {
-        //println!("{:?}", stack);
+        //instructions.reverse();
+        //println!("{:?}, {:?}", stack, instructions);
+        //instructions.reverse();
         let c_instr = instructions.pop().unwrap();
         match c_instr {
             Command::Integer(val) => stack.push(val),
@@ -247,59 +251,59 @@ fn execute(code: HashMap<u64, Vec<Command>>) {
                         std::process::exit(0);
                     }
                 }
-                BuiltInCommand::Decrement => {
+                BuiltInCommand::Decrement => { // a -> a-1
                     if let Some(value) = stack.last_mut() {
                         *value -= 1;
                     }
                 }
-                BuiltInCommand::Increment => {
+                BuiltInCommand::Increment => { // a -> a+1
                     if let Some(value) = stack.last_mut() {
                         *value += 1;
                     }
                 }
-                BuiltInCommand::Sum => {
+                BuiltInCommand::Sum => { // a b -> a+b
                     if let Some(value) = stack.pop() {
                         if let Some(last) = stack.last_mut() {
                             *last += value;
                         }
                     }
                 }
-                BuiltInCommand::Difference => {
+                BuiltInCommand::Difference => { // a b -> a-b
                     if let Some(value) = stack.pop() {
                         if let Some(last) = stack.last_mut() {
                             *last -= value;
                         }
                     }
                 }
-                BuiltInCommand::Product => {
+                BuiltInCommand::Product => { // a b -> ab
                     if let Some(value) = stack.pop() {
                         if let Some(last) = stack.last_mut() {
                             *last *= value;
                         }
                     }
                 }
-                BuiltInCommand::Quotient => {
+                BuiltInCommand::Quotient => { // a b -> a/b
                     if let Some(value) = stack.pop() {
                         if let Some(last) = stack.last_mut() {
                             *last /= value;
                         }
                     }
                 }
-                BuiltInCommand::Modulo => {
+                BuiltInCommand::Modulo => { // a b -> a%b
                     if let Some(value) = stack.pop() {
                         if let Some(last) = stack.last_mut() {
                             *last %= value;
                         }
                     }
                 }
-                BuiltInCommand::Equality => {
+                BuiltInCommand::Equality => { // a b -> a=b (1 for true)
                     if let Some(value) = stack.pop() {
                         if let Some(value_2) = stack.pop() {
                             stack.push(if value == value_2 {BigInt::from(1)} else {BigInt::from(0)});
                         }
                     }
                 }
-                BuiltInCommand::Inequality => {
+                BuiltInCommand::Inequality => { // a b -> a!=b (1 for true)
                     if let Some(value) = stack.pop() {
                         if let Some(value_2) = stack.pop() {
                             stack.push(if value != value_2 {BigInt::from(1)} else {BigInt::from(0)});
@@ -334,17 +338,17 @@ fn execute(code: HashMap<u64, Vec<Command>>) {
                         }
                     }
                 }
-                BuiltInCommand::Drop => {
+                BuiltInCommand::Drop => { // a ->
                     stack.pop();
                 }
-                BuiltInCommand::Duplicate => {
+                BuiltInCommand::Duplicate => { // a -> a a
                     if let Some(value) = stack.last() {
                         stack.push(value.clone());
                     } else {
                         stack.push(BigInt::from(0));
                     }
                 }
-                BuiltInCommand::Swap => {
+                BuiltInCommand::Swap => { // a b -> b a
                     if let Some(value) = stack.pop() {
                         if let Some(value_2) = stack.pop() {
                             stack.push(value);
@@ -352,9 +356,17 @@ fn execute(code: HashMap<u64, Vec<Command>>) {
                         }
                     }
                 }
-                BuiltInCommand::Over => {
+                BuiltInCommand::Over => { // a b -> a b a
                     let val = if stack.len() > 2 {
-                        stack.remove(stack.len()-2)
+                        stack[stack.len()-2].clone()
+                    } else {
+                        BigInt::from(0)
+                    };
+                    stack.push(val);
+                }
+                BuiltInCommand::Rotate => { // a b c -> b c a
+                    let val = if stack.len() > 2 {
+                        stack.remove(stack.len()-3)
                     } else {
                         BigInt::from(0)
                     };
