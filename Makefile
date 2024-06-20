@@ -1,6 +1,6 @@
 
 NAME=cairn
-PREFIX=/usr
+PREFIX=/usr/local
 
 all:
 	cargo build --release
@@ -8,7 +8,7 @@ all:
 install:
 	mkdir -p ${DESTDIR}${PREFIX}/bin
 	cp -f target/release/${NAME} ${DESTDIR}${PREFIX}/bin
-	chmod 755 ${DESTDIR}${PREFIX}/bin/${NAME}
+	chmod +x ${DESTDIR}${PREFIX}/bin/${NAME}
 
 .PHONY: all install
 

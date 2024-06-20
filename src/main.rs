@@ -12,7 +12,7 @@ enum Command {
     Integer(BigInt),
     BuiltIn(BuiltInCommand),
     UserDef(u64),
-    Branch(HashMap<BigInt, Command>)
+    Branch(HashMap<usize, Command>)
 }
 
 #[derive(Clone)]
@@ -84,9 +84,9 @@ impl Command {
                 let mut result = HashMap::new();
                 for (i, c) in choices.enumerate() {
                     if !c.is_empty() {
-                        result.insert(BigInt::from(i), Self::from_str(c));
+                        result.insert(i, Self::from_str(c));
                     } else {
-                        result.insert(BigInt::from(i), Self::BuiltIn(BuiltInCommand::NoOp));
+                        result.insert(i, Self::BuiltIn(BuiltInCommand::NoOp));
                     }
                 }
                 Self::Branch(result)
@@ -115,7 +115,7 @@ fn main() {
         println!("See https://github.com/pgattic/cairn/issues/1 for progress updates.");
         println!();
         eprintln!("[{}]: Please specify a file.", args[0]);
-        std::process::exit(1);
+        std::process::exit(0x01);
     }
 
     let target_file = &args[1];
@@ -124,7 +124,7 @@ fn main() {
         Ok(data) => data,
         Err(err) => {
             eprintln!("{}: can't open file '{}': {}", args[0], target_file, err);
-            std::process::exit(2);
+            std::process::exit(0x02);
         }
     };
 
@@ -349,12 +349,8 @@ fn execute(code: HashMap<u64, Vec<Command>>) {
                     }
                 }
                 BuiltInCommand::Swap => { // a b -> b a
-                    if let Some(value) = stack.pop() {
-                        if let Some(value_2) = stack.pop() {
-                            stack.push(value);
-                            stack.push(value_2);
-                        }
-                    }
+                    let len = stack.len();
+                    stack.swap(len-1, len-2);
                 }
                 BuiltInCommand::Over => { // a b -> a b a
                     let val = if stack.len() > 2 {
@@ -365,12 +361,8 @@ fn execute(code: HashMap<u64, Vec<Command>>) {
                     stack.push(val);
                 }
                 BuiltInCommand::Rotate => { // a b c -> b c a
-                    let val = if stack.len() > 2 {
-                        stack.remove(stack.len()-3)
-                    } else {
-                        BigInt::from(0)
-                    };
-                    stack.push(val);
+                    let len = stack.len();
+                    stack[len-3..].rotate_left(1);
                 }
                 BuiltInCommand::NoOp => ()
             },
@@ -387,12 +379,20 @@ fn execute(code: HashMap<u64, Vec<Command>>) {
                 }
             },
             Command::Branch(expression) => {
-                let choice = stack.pop().unwrap();
-                if expression.contains_key(&choice) {
-                    instructions.push(expression.get(&choice).unwrap().clone());
-                } else {
-                    let max_opt = expression.keys().max().unwrap();
-                    if choice > *max_opt {
+                let val = stack.pop().unwrap();
+                match val.try_into() {
+                    Ok(choice) => {
+                        if expression.contains_key(&choice) {
+                            instructions.push(expression.get(&choice).unwrap().clone());
+                        } else {
+                            let max_opt = expression.keys().max().unwrap();
+                            if choice > *max_opt {
+                                instructions.push(expression.get(&max_opt).unwrap().clone());
+                            }
+                        }
+                    },
+                    Err(_) => { // Assuming the number is too great for a usize (but negatives?...)
+                        let max_opt = expression.keys().max().unwrap();
                         instructions.push(expression.get(&max_opt).unwrap().clone());
                     }
                 }
@@ -400,4 +400,5 @@ fn execute(code: HashMap<u64, Vec<Command>>) {
         }
     }
 }
+
 
