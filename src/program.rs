@@ -12,13 +12,14 @@ pub fn execute(code: HashMap<String, Vec<Command>>) {
     }
     let mut instructions = code[&main_name].clone();
     instructions.reverse();
-    let mut last_func = main_name;
+    let mut call_stack = vec![("main".to_string(), instructions.len())];
 
     while !instructions.is_empty() {
         //instructions.reverse();
         //println!("{:?}, {:?}", stack, instructions);
         //instructions.reverse();
         let c_instr = instructions.pop().unwrap();
+        call_stack.last_mut().unwrap().1 -= 1;
         match c_instr {
             Command::Integer(val) => stack.push(val),
             Command::BuiltIn(cmd) => match cmd {
@@ -188,13 +189,21 @@ pub fn execute(code: HashMap<String, Vec<Command>>) {
             },
             Command::UserDef(name) => {
                 if let Some(values) = code.get(&name) {
-                    last_func = name;
-                    for value in values.iter().rev() {
-                        instructions.push(value.clone());
+                    if values.len() > 0 {
+                        call_stack.push((name.clone(), values.len()));
+                        for value in values.iter().rev() {
+                            instructions.push(value.clone());
+                        }
                     }
                 } else {
                     eprintln!("ERROR: Unresolved Symbol: \"{}\"", name);
-                    eprintln!("  In \"${}\"", last_func);
+                    let mut indentation = 0;
+                    while call_stack.len() > 0 {
+                        indentation += 1;
+                        let stack_call = call_stack.remove(0);
+                        let instr_ptr = code.get(&stack_call.0).unwrap().len() - stack_call.1;
+                        eprintln!("{}in \"${}\", instruction {}", "  ".repeat(indentation), stack_call.0, instr_ptr);
+                    }
                     std::process::exit(1);
                 }
             },
@@ -217,6 +226,9 @@ pub fn execute(code: HashMap<String, Vec<Command>>) {
                     }
                 }
             }
+        }
+        while call_stack.len() > 1 && call_stack.last().unwrap().1 < 1 {
+            call_stack.pop();
         }
     }
 }
