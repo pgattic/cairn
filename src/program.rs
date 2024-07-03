@@ -1,19 +1,18 @@
-use crate::calculate_hash;
 use crate::{BuiltInCommand, Command};
 use std::io;
 use num_bigint::BigInt;
 use num_bigint::Sign::Plus;
 use std::collections::HashMap;
 
-pub fn execute(code: HashMap<u64, Vec<Command>>) {
+pub fn execute(code: HashMap<String, Vec<Command>>) {
     let mut stack: Vec<BigInt> = Vec::new();
-    let main_hash: u64 = calculate_hash("main");
-    if !code.contains_key(&main_hash) { // I can has main function?
+    let main_name = "main".to_string();
+    if !code.contains_key(&main_name) { // I can has main function?
         return;
     }
-    let mut instructions = code[&main_hash].clone();
+    let mut instructions = code[&main_name].clone();
     instructions.reverse();
-    let mut last_func = main_hash;
+    let mut last_func = main_name;
 
     while !instructions.is_empty() {
         //instructions.reverse();

@@ -1,7 +1,6 @@
 pub mod command;
 pub mod program;
 use crate::command::{BuiltInCommand, Command};
-use std::hash::{DefaultHasher, Hash, Hasher};
 use std::env;
 use std::fs;
 
@@ -31,11 +30,5 @@ fn main() {
     //println!("{:?}", functions);
 
     program::execute(functions);
-}
-
-fn calculate_hash(t: &str) -> u64 {
-    let mut s = DefaultHasher::new();
-    t.hash(&mut s);
-    s.finish()
 }
 

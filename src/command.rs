@@ -1,4 +1,3 @@
-use crate::calculate_hash;
 use std::collections::HashMap;
 use num_bigint::BigInt;
 use num_bigint::Sign::Plus;
@@ -8,7 +7,7 @@ use num_bigint::Sign::Plus;
 pub enum Command {
     Integer(BigInt),
     BuiltIn(BuiltInCommand),
-    UserDef(u64),
+    UserDef(String),
     Branch(HashMap<usize, Command>)
 }
 
@@ -88,20 +87,20 @@ impl Command {
                 }
                 Self::Branch(result)
             }
-            s if s.starts_with('`') => { // a string!
+            s if s.starts_with('"') => { // a string!
                 let value = &s[1..s.len()-1];
                 Self::Integer(BigInt::from_bytes_be(Plus, value.as_bytes()))
             }
-            _ => Self::UserDef(calculate_hash(s))
+            _ => Self::UserDef(s.to_string())
         }
     }
 
-    pub fn split_code(input: String) -> HashMap<u64, Vec<Command>> {
-        let mut result: HashMap<u64, Vec<Command>> = HashMap::new();
+    pub fn split_code(input: String) -> HashMap<String, Vec<Command>> {
+        let mut result: HashMap<String, Vec<Command>> = HashMap::new();
         let mut in_comment = false;
         let mut in_str = false;
         let mut word_start = 0;
-        let mut curr_func_hash: Option<u64> = None;
+        let mut curr_func: Option<&str> = None;
         for (i, ch) in input.chars().enumerate() {
             match ch {
                 '#' if !in_str => in_comment = true,
@@ -114,14 +113,14 @@ impl Command {
                     if i - word_start > 0 { // The Word is done!
                         let word = &input[word_start..i];
                         if word.starts_with('$') {
-                            let hash = calculate_hash(&word[1..]);
-                            curr_func_hash = Some(hash);
-                            result.insert(hash, Vec::new());
+                            let name = &word[1..];
+                            curr_func = Some(name);
+                            result.insert(name.to_string(), Vec::new());
                         } else {
-                            match curr_func_hash {
+                            match curr_func {
                                 None => (),
-                                Some(hash) => {
-                                    result.entry(hash).or_insert_with(Vec::new).push(Command::from_str(word));
+                                Some(name) => {
+                                    result.entry(name.to_string()).or_insert_with(Vec::new).push(Command::from_str(word));
                                 }
                             }
                         }
@@ -136,10 +135,10 @@ impl Command {
             std::process::exit(1);
         }
         if word_start < input.len() { // Check for no ending whitespace
-            match curr_func_hash {
+            match curr_func {
                 None => (),
-                Some(hash) => {
-                    result.entry(hash).or_insert_with(Vec::new).push(Command::from_str(&input[word_start..]));
+                Some(name) => {
+                    result.entry(name.to_string()).or_insert_with(Vec::new).push(Command::from_str(&input[word_start..]));
                 }
             }
         }
