@@ -18,6 +18,7 @@ pub fn execute(code: HashMap<String, Vec<Command>>) {
         //instructions.reverse();
         //println!("{:?}, {:?}", stack, instructions);
         //instructions.reverse();
+        //println!("{:?}", call_stack);
         let c_instr = instructions.pop().unwrap();
         call_stack.last_mut().unwrap().1 -= 1;
         match c_instr {
@@ -209,6 +210,7 @@ pub fn execute(code: HashMap<String, Vec<Command>>) {
             },
             Command::Branch(expression) => {
                 let val = stack.pop().unwrap();
+                call_stack.last_mut().unwrap().1 += 1;
                 match val.try_into() {
                     Ok(choice) => {
                         if expression.contains_key(&choice) {
@@ -227,7 +229,7 @@ pub fn execute(code: HashMap<String, Vec<Command>>) {
                 }
             }
         }
-        while call_stack.len() > 1 && call_stack.last().unwrap().1 < 1 {
+        while call_stack.len() > 0 && call_stack.last().unwrap().1 == 0 {
             call_stack.pop();
         }
     }
