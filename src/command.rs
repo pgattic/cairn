@@ -20,6 +20,8 @@ pub enum BuiltInCommand {
     PrintLine,
     ReadLine,
     Exit,
+    Arg,
+    Argc,
 
     Increment,
     Decrement,
@@ -56,6 +58,8 @@ impl Command {
             "println"   => Self::BuiltIn(BuiltInCommand::PrintLine),
             "readln"    => Self::BuiltIn(BuiltInCommand::ReadLine),
             "exit"      => Self::BuiltIn(BuiltInCommand::Exit),
+            "arg"       => Self::BuiltIn(BuiltInCommand::Arg),
+            "argc"      => Self::BuiltIn(BuiltInCommand::Argc),
             "++"        => Self::BuiltIn(BuiltInCommand::Increment),
             "--"        => Self::BuiltIn(BuiltInCommand::Decrement),
             "+"         => Self::BuiltIn(BuiltInCommand::Sum),

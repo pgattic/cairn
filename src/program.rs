@@ -14,6 +14,8 @@ pub fn execute(code: HashMap<String, Vec<Command>>) {
     instructions.reverse();
     let mut call_stack = vec![("main".to_string(), instructions.len())];
 
+    let kwargs: Vec<String> = std::env::args().collect();
+
     while !instructions.is_empty() {
         //instructions.reverse();
         //println!("{:?}, {:?}", stack, instructions);
@@ -72,6 +74,15 @@ pub fn execute(code: HashMap<String, Vec<Command>>) {
                     } else {
                         std::process::exit(0);
                     }
+                }
+                BuiltInCommand::Arg => {
+                    if let Some(value) = stack.pop() {
+                        let arg_i: usize = *value.to_u32_digits().1.first().unwrap() as usize;
+                        stack.push(BigInt::from_bytes_be(Plus, kwargs[arg_i].as_bytes()))
+                    }
+                }
+                BuiltInCommand::Argc => {
+                    stack.push(kwargs.len().into());
                 }
                 BuiltInCommand::Decrement => { // a -> a-1
                     if let Some(value) = stack.last_mut() {
