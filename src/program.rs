@@ -1,5 +1,6 @@
-use crate::{BuiltInCommand, Command};
+use crate::{call_stack::CallStack, BuiltInCommand, Command};
 use std::io;
+use std::env;
 use num_bigint::BigInt;
 use num_bigint::Sign::Plus;
 use std::collections::HashMap;
@@ -12,17 +13,19 @@ pub fn execute(code: HashMap<String, Vec<Command>>) {
     }
     let mut instructions = code[&main_name].clone();
     instructions.reverse();
-    let mut call_stack = vec![("main".to_string(), instructions.len())];
 
-    let kwargs: Vec<String> = std::env::args().collect();
+    // Keeps track of how many instsructions are left in each function's execution.
+    // The call stack is used for debugging purposes, not for accurate code execution
+    // TODO: Make it toggleable for performance reasons
+    let mut call_stack = CallStack::new();
+    call_stack.push("main".to_string(), instructions.len());
 
     while !instructions.is_empty() {
         //instructions.reverse();
         //println!("{:?}, {:?}", stack, instructions);
         //instructions.reverse();
-        //println!("{:?}", call_stack);
         let c_instr = instructions.pop().unwrap();
-        call_stack.last_mut().unwrap().1 -= 1;
+        call_stack.step();
         match c_instr {
             Command::Integer(val) => stack.push(val),
             Command::BuiltIn(cmd) => match cmd {
@@ -74,15 +77,6 @@ pub fn execute(code: HashMap<String, Vec<Command>>) {
                     } else {
                         std::process::exit(0);
                     }
-                }
-                BuiltInCommand::Arg => {
-                    if let Some(value) = stack.pop() {
-                        let arg_i: usize = *value.to_u32_digits().1.first().unwrap() as usize;
-                        stack.push(BigInt::from_bytes_be(Plus, kwargs[arg_i].as_bytes()))
-                    }
-                }
-                BuiltInCommand::Argc => {
-                    stack.push(kwargs.len().into());
                 }
                 BuiltInCommand::Decrement => { // a -> a-1
                     if let Some(value) = stack.last_mut() {
@@ -197,39 +191,50 @@ pub fn execute(code: HashMap<String, Vec<Command>>) {
                     let len = stack.len();
                     stack[len-3..].rotate_left(1);
                 }
+                BuiltInCommand::CmdArg => { // a -> kwargs[a] || 0
+                    if let Some(arg_bi) = stack.pop() {
+                        stack.push(if let Ok(arg_i) = arg_bi.try_into() {
+                            match env::args().nth(arg_i) {
+                                Some(value) => {
+                                    BigInt::from_bytes_be(Plus, value.as_bytes())
+                                },
+                                None => {
+                                    BigInt::from(0)
+                                }
+                            }
+                        } else {
+                            BigInt::from(0)
+                        });
+                    }
+                }
                 BuiltInCommand::NoOp => ()
             },
             Command::UserDef(name) => {
                 if let Some(values) = code.get(&name) {
                     if values.len() > 0 {
-                        call_stack.push((name.clone(), values.len()));
+                        call_stack.push(name.clone(), values.len());
                         for value in values.iter().rev() {
                             instructions.push(value.clone());
                         }
                     }
                 } else {
-                    eprintln!("ERROR: Unresolved Symbol: \"{}\"", name);
-                    let mut indentation = 0;
-                    while call_stack.len() > 0 {
-                        indentation += 1;
-                        let stack_call = call_stack.remove(0);
-                        let instr_ptr = code.get(&stack_call.0).unwrap().len() - stack_call.1;
-                        eprintln!("{}in \"${}\", instruction {}", "  ".repeat(indentation), stack_call.0, instr_ptr);
-                    }
+                    eprintln!("ERROR: Unresolved Token: \"{}\"", name);
+                    eprint!("{}", call_stack.dump());
                     std::process::exit(1);
                 }
             },
             Command::Branch(expression) => {
                 let val = stack.pop().unwrap();
-                call_stack.last_mut().unwrap().1 += 1;
                 match val.try_into() {
                     Ok(choice) => {
                         if expression.contains_key(&choice) {
                             instructions.push(expression.get(&choice).unwrap().clone());
+                            call_stack.unstep();
                         } else {
                             let max_opt = expression.keys().max().unwrap();
                             if choice > *max_opt {
                                 instructions.push(expression.get(&max_opt).unwrap().clone());
+                                call_stack.unstep();
                             }
                         }
                     },
@@ -240,9 +245,7 @@ pub fn execute(code: HashMap<String, Vec<Command>>) {
                 }
             }
         }
-        while call_stack.len() > 0 && call_stack.last().unwrap().1 == 0 {
-            call_stack.pop();
-        }
+        call_stack.propagate();
     }
 }
 

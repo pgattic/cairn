@@ -2,8 +2,7 @@ use std::collections::HashMap;
 use num_bigint::BigInt;
 use num_bigint::Sign::Plus;
 
-#[derive(Clone)]
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Command {
     Integer(BigInt),
     BuiltIn(BuiltInCommand),
@@ -11,8 +10,7 @@ pub enum Command {
     Branch(HashMap<usize, Command>)
 }
 
-#[derive(Clone)]
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum BuiltInCommand {
     Put,
     PutLine,
@@ -20,8 +18,6 @@ pub enum BuiltInCommand {
     PrintLine,
     ReadLine,
     Exit,
-    Arg,
-    Argc,
 
     Increment,
     Decrement,
@@ -42,6 +38,7 @@ pub enum BuiltInCommand {
     Swap,
     Over,
     Rotate,
+    CmdArg,
     NoOp,
 }
 
@@ -58,8 +55,6 @@ impl Command {
             "println"   => Self::BuiltIn(BuiltInCommand::PrintLine),
             "readln"    => Self::BuiltIn(BuiltInCommand::ReadLine),
             "exit"      => Self::BuiltIn(BuiltInCommand::Exit),
-            "arg"       => Self::BuiltIn(BuiltInCommand::Arg),
-            "argc"      => Self::BuiltIn(BuiltInCommand::Argc),
             "++"        => Self::BuiltIn(BuiltInCommand::Increment),
             "--"        => Self::BuiltIn(BuiltInCommand::Decrement),
             "+"         => Self::BuiltIn(BuiltInCommand::Sum),
@@ -78,8 +73,9 @@ impl Command {
             "swp"       => Self::BuiltIn(BuiltInCommand::Swap),
             "over"      => Self::BuiltIn(BuiltInCommand::Over),
             "rot"       => Self::BuiltIn(BuiltInCommand::Rotate),
+            "arg"       => Self::BuiltIn(BuiltInCommand::CmdArg),
             "nop"       => Self::BuiltIn(BuiltInCommand::NoOp),
-            s if s.starts_with('?') => {
+            s if s.starts_with('?') => { // Comparison Statement
                 let choices = s[1..].split(":");
                 let mut result = HashMap::new();
                 for (i, c) in choices.enumerate() {
