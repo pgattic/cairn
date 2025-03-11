@@ -1,12 +1,11 @@
 use crate::{call_stack::CallStack, BuiltInCommand, Command};
 use std::io;
 use std::env;
-use num_bigint::BigInt;
-use num_bigint::Sign::Plus;
+use rug::{Integer, integer::Order};
 use std::collections::HashMap;
 
 pub fn execute(code: HashMap<String, Vec<Command>>) {
-    let mut stack: Vec<BigInt> = Vec::new();
+    let mut stack: Vec<Integer> = Vec::new();
     let main_name = "main".to_string();
     if !code.contains_key(&main_name) { // I can has main function?
         return;
@@ -43,13 +42,13 @@ pub fn execute(code: HashMap<String, Vec<Command>>) {
                 }
                 BuiltInCommand::Print => {
                     if let Some(value) = stack.pop() {
-                        let (_, bytes_be) = value.to_bytes_be();
+                        let bytes_be = value.to_digits::<u8>(Order::MsfBe);
                         print!("{}", String::from_utf8(bytes_be).unwrap());
                     }
                 }
                 BuiltInCommand::PrintLine => {
                     if let Some(value) = stack.pop() {
-                        let (_, bytes_be) = value.to_bytes_be();
+                        let bytes_be = value.to_digits::<u8>(Order::MsfBe);
                         println!("{}", String::from_utf8(bytes_be).unwrap());
                     }
                 }
@@ -62,7 +61,7 @@ pub fn execute(code: HashMap<String, Vec<Command>>) {
                     if let Some('\r') = input.chars().next_back() {
                         input.pop();
                     }
-                    stack.push(BigInt::from_bytes_be(Plus, input.as_bytes()));
+                    stack.push(Integer::from_digits(input.as_bytes(), Order::MsfBe));
                 }
                 BuiltInCommand::Exit => {
                     if let Some(value) = stack.pop() {
@@ -126,42 +125,42 @@ pub fn execute(code: HashMap<String, Vec<Command>>) {
                 BuiltInCommand::Equality => { // a b -> a=b (1 for true)
                     if let Some(value) = stack.pop() {
                         if let Some(value_2) = stack.pop() {
-                            stack.push(if value == value_2 {BigInt::from(1)} else {BigInt::from(0)});
+                            stack.push(if value == value_2 { Integer::ONE.clone() } else { Integer::ZERO });
                         }
                     }
                 }
                 BuiltInCommand::Inequality => { // a b -> a!=b (1 for true)
                     if let Some(value) = stack.pop() {
                         if let Some(value_2) = stack.pop() {
-                            stack.push(if value != value_2 {BigInt::from(1)} else {BigInt::from(0)});
+                            stack.push(if value != value_2 { Integer::ONE.clone() } else { Integer::ZERO });
                         }
                     }
                 }
                 BuiltInCommand::GreaterThan => {
                     if let Some(value) = stack.pop() {
                         if let Some(value_2) = stack.pop() {
-                            stack.push(if value > value_2 {BigInt::from(1)} else {BigInt::from(0)});
+                            stack.push(if value > value_2 { Integer::ONE.clone() } else { Integer::ZERO });
                         }
                     }
                 }
                 BuiltInCommand::LessThan => {
                     if let Some(value) = stack.pop() {
                         if let Some(value_2) = stack.pop() {
-                            stack.push(if value < value_2 {BigInt::from(1)} else {BigInt::from(0)});
+                            stack.push(if value < value_2 { Integer::ONE.clone() } else { Integer::ZERO });
                         }
                     }
                 }
                 BuiltInCommand::GreaterEqual => {
                     if let Some(value) = stack.pop() {
                         if let Some(value_2) = stack.pop() {
-                            stack.push(if value >= value_2 {BigInt::from(1)} else {BigInt::from(0)});
+                            stack.push(if value >= value_2 { Integer::ONE.clone() } else { Integer::ZERO });
                         }
                     }
                 }
                 BuiltInCommand::LessEqual => {
                     if let Some(value) = stack.pop() {
                         if let Some(value_2) = stack.pop() {
-                            stack.push(if value <= value_2 {BigInt::from(1)} else {BigInt::from(0)});
+                            stack.push(if value <= value_2 { Integer::ONE.clone() } else { Integer::ZERO });
                         }
                     }
                 }
@@ -172,7 +171,7 @@ pub fn execute(code: HashMap<String, Vec<Command>>) {
                     if let Some(value) = stack.last() {
                         stack.push(value.clone());
                     } else {
-                        stack.push(BigInt::from(0));
+                        stack.push(Integer::ZERO);
                     }
                 }
                 BuiltInCommand::Swap => { // a b -> b a
@@ -183,7 +182,7 @@ pub fn execute(code: HashMap<String, Vec<Command>>) {
                     let val = if stack.len() > 2 {
                         stack[stack.len()-2].clone()
                     } else {
-                        BigInt::from(0)
+                        Integer::ZERO
                     };
                     stack.push(val);
                 }
@@ -196,14 +195,14 @@ pub fn execute(code: HashMap<String, Vec<Command>>) {
                         stack.push(if let Ok(arg_i) = arg_bi.try_into() {
                             match env::args().nth(arg_i) {
                                 Some(value) => {
-                                    BigInt::from_bytes_be(Plus, value.as_bytes())
+                                    Integer::from_digits(value.as_bytes(), Order::MsfBe)
                                 },
                                 None => {
-                                    BigInt::from(0)
+                                    Integer::ZERO
                                 }
                             }
                         } else {
-                            BigInt::from(0)
+                            Integer::ZERO
                         });
                     }
                 }

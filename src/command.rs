@@ -1,10 +1,9 @@
 use std::collections::HashMap;
-use num_bigint::BigInt;
-use num_bigint::Sign::Plus;
+use rug::{Integer, integer::Order};
 
 #[derive(Clone, Debug)]
 pub enum Command {
-    Integer(BigInt),
+    Integer(Integer),
     BuiltIn(BuiltInCommand),
     UserDef(String),
     Branch(HashMap<usize, Command>)
@@ -44,7 +43,7 @@ pub enum BuiltInCommand {
 
 impl Command {
     fn from_str(s: &str) -> Self {
-        if let Ok(value) = s.parse::<BigInt>() {
+        if let Ok(value) = s.parse::<Integer>() {
             return Command::Integer(value);
         }
 
@@ -89,7 +88,7 @@ impl Command {
             }
             s if s.starts_with('"') => { // a string!
                 let value = &s[1..s.len()-1];
-                Self::Integer(BigInt::from_bytes_be(Plus, value.as_bytes()))
+                Self::Integer(Integer::from_digits(value.as_bytes(), Order::MsfBe))
             }
             _ => Self::UserDef(s.to_string())
         }
